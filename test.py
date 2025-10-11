@@ -27,19 +27,11 @@ nltk.download("punkt", quiet=True)
 nltk.download("stopwords", quiet=True)
 
 REUTERS_DIR = "reuters21578"
-DocID = int
-PostingList = List[DocID]
-InvertedIndex = Dict[str, PostingList]
-TokenTransform = Callable[[Sequence[str]], Sequence[str]]
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-def load_reuters_docs(path: str) -> List[Tuple[DocID, str]]:
-    """Parse the SGML Reuters dump and keep ``(doc_id, raw_text)`` tuples."""
-
-    docs: List[Tuple[DocID, str]] = []
+# ===== Shared helpers =====
+def load_reuters_docs(path):
+    docs = []
     for filename in os.listdir(path):
         if not filename.endswith(".sgm"):
             continue
@@ -53,30 +45,25 @@ def load_reuters_docs(path: str) -> List[Tuple[DocID, str]]:
     return docs
 
 
-def tokenize_documents(docs: Iterable[Tuple[DocID, str]]) -> List[Tuple[DocID, List[str]]]:
-    """Tokenise every Reuters document exactly once for reuse across variants."""
+def tokenize_documents(docs):
+    tokenised = []
+    for doc_id, text in docs:
+        tokenised.append((doc_id, word_tokenize(text)))
+    return tokenised
 
-    return [(doc_id, word_tokenize(text)) for doc_id, text in docs]
 
-
-# ---------------------------------------------------------------------------
-# Subproject I – Naive indexer
-# ---------------------------------------------------------------------------
-def naive_pairs(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform: TokenTransform) -> List[Tuple[str, DocID]]:
-    """Collect term–docID pairs (list ``F``) using the naive algorithm."""
-
-    pairs: List[Tuple[str, DocID]] = []
+# ===== Subproject I – Naive indexer =====
+def naive_pairs(tokenised_docs, transform):
+    pairs = []
     for doc_id, tokens in tokenised_docs:
         for term in transform(tokens):
             pairs.append((term, doc_id))
     return pairs
 
 
-def dedupe_sorted_pairs(pairs: Sequence[Tuple[str, DocID]]) -> List[Tuple[str, DocID]]:
-    """Remove duplicates from a sorted list of term–docID pairs."""
-
-    deduped: List[Tuple[str, DocID]] = []
-    prev: Tuple[str, DocID] | None = None
+def dedupe_sorted_pairs(pairs):
+    deduped = []
+    prev = None
     for pair in pairs:
         if pair != prev:
             deduped.append(pair)
@@ -84,8 +71,8 @@ def dedupe_sorted_pairs(pairs: Sequence[Tuple[str, DocID]]) -> List[Tuple[str, D
     return deduped
 
 
-def build_index_from_pairs(pairs: Iterable[Tuple[str, DocID]]) -> InvertedIndex:
-    index: InvertedIndex = defaultdict(list)
+def build_index_from_pairs(pairs):
+    index = defaultdict(list)
     for term, doc_id in pairs:
         postings = index[term]
         if not postings or postings[-1] != doc_id:
@@ -93,9 +80,7 @@ def build_index_from_pairs(pairs: Iterable[Tuple[str, DocID]]) -> InvertedIndex:
     return index
 
 
-def naive_build_index(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform: TokenTransform) -> Tuple[InvertedIndex, int, int]:
-    """Apply the three-step naive indexing pipeline and return stats."""
-
+def naive_build_index(tokenised_docs, transform):
     pairs = naive_pairs(tokenised_docs, transform)
     pairs.sort()
     unique_pairs = dedupe_sorted_pairs(pairs)
@@ -103,16 +88,15 @@ def naive_build_index(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], tra
     return index, len(pairs), len(unique_pairs)
 
 
-# ---------------------------------------------------------------------------
-# Subproject II – Single-term and AND query processing
-# ---------------------------------------------------------------------------
-def search_single(term: str, index: InvertedIndex) -> PostingList:
+# ===== Subproject II – Single-term and AND query processing =====
+def search_single(term, index):
     return index.get(term, [])
 
 
-def intersect(postings_a: Sequence[DocID], postings_b: Sequence[DocID]) -> PostingList:
-    ia = ib = 0
-    out: PostingList = []
+def intersect(postings_a, postings_b):
+    ia = 0
+    ib = 0
+    out = []
     while ia < len(postings_a) and ib < len(postings_b):
         a, b = postings_a[ia], postings_b[ib]
         if a == b:
@@ -126,7 +110,7 @@ def intersect(postings_a: Sequence[DocID], postings_b: Sequence[DocID]) -> Posti
     return out
 
 
-def search_and(terms: Sequence[str], index: InvertedIndex) -> PostingList:
+def search_and(terms, index):
     if not terms:
         return []
     result = list(search_single(terms[0], index))
@@ -137,44 +121,42 @@ def search_and(terms: Sequence[str], index: InvertedIndex) -> PostingList:
     return result
 
 
-# ---------------------------------------------------------------------------
-# Subproject III – Lossy dictionary compression experiments
-# ---------------------------------------------------------------------------
+# ===== Subproject III – Lossy dictionary compression experiments =====
 EN_STOP = set(stopwords.words("english"))
 TOP30 = {"the", "of", "and", "to", "a", "in", "that", "is", "was", "he", "for", "it", "with", "as", "his", "on", "be", "at", "by", "i", "this", "had", "not", "are", "but", "from", "or", "have", "an", "they"}
 STOP150 = set(sorted(EN_STOP)[:150])
 STEMMER = PorterStemmer()
 
 
-def keep_all(tokens: Sequence[str]) -> Sequence[str]:
+def keep_all(tokens):
     return tokens
 
 
-def drop_numbers(tokens: Sequence[str]) -> Sequence[str]:
+def drop_numbers(tokens):
     return [t for t in tokens if not any(ch.isdigit() for ch in t)]
 
 
-def case_fold(tokens: Sequence[str]) -> Sequence[str]:
+def case_fold(tokens):
     return [t.lower() for t in tokens]
 
 
-def stop_30(tokens: Sequence[str]) -> Sequence[str]:
+def stop_30(tokens):
     lower = case_fold(tokens)
     return [t for t in lower if t not in TOP30]
 
 
-def stop_150(tokens: Sequence[str]) -> Sequence[str]:
+def stop_150(tokens):
     lower = case_fold(tokens)
     return [t for t in lower if t not in STOP150]
 
 
-def stemmed(tokens: Sequence[str]) -> Sequence[str]:
+def stemmed(tokens):
     lower = [t for t in case_fold(tokens) if t not in EN_STOP]
     return [STEMMER.stem(t) if any(ch.isalpha() for ch in t) else t for t in lower]
 
 
-VARIANTS: List[Tuple[str, TokenTransform]] = [
-    ("UNFILTERED", keep_all),
+BASE_VARIANT = ("UNFILTERED", keep_all)
+COMPRESSION_VARIANTS = [
     ("CASE FOLD", case_fold),  # column 1 → column 2 from Table 5.1 (lossy)
     ("NO NUMBERS", drop_numbers),
     ("STOP 30", stop_30),
@@ -183,15 +165,15 @@ VARIANTS: List[Tuple[str, TokenTransform]] = [
 ]
 
 
-def describe_index(index: InvertedIndex) -> Tuple[int, int]:
+def describe_index(index):
     return len(index), sum(len(pl) for pl in index.values())
 
 
-def format_int(number: int) -> str:
+def format_int(number):
     return f"{number:,}"
 
 
-def run_compression_table(index_builds: List[Tuple[str, InvertedIndex]]) -> None:
+def run_compression_table(index_builds):
     print("\nDictionary compression impact (relative deltas)")
     print("-" * 100)
     print(f"{'Variant':<16} | {'Dict':>10} | {'ΔPrev%':>10} | {'ΔBase%':>10} | "
@@ -214,7 +196,7 @@ def run_compression_table(index_builds: List[Tuple[str, InvertedIndex]]) -> None
     print("-" * 100)
 
 
-def compare_query_results(name: str, transform: TokenTransform, index: InvertedIndex, samples: List[List[str]]) -> None:
+def compare_query_results(name, transform, index, samples):
     print(f"\n[{name}] query results")
     for query in samples:
         transformed = list(transform(query))
@@ -230,11 +212,9 @@ def compare_query_results(name: str, transform: TokenTransform, index: InvertedI
         print(f" {label:<6} {query} -> {len(hits)} docs (sample {hits[:10]})")
 
 
-# ---------------------------------------------------------------------------
-# Subproject IV – SPIMI indexer
-# ---------------------------------------------------------------------------
-def spimi_build_index(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform: TokenTransform) -> InvertedIndex:
-    index: InvertedIndex = defaultdict(list)
+# ===== Subproject IV – SPIMI indexer =====
+def spimi_build_index(tokenised_docs, transform):
+    index = defaultdict(list)
     for doc_id, tokens in tokenised_docs:
         for term in transform(tokens):
             postings = index[term]
@@ -246,9 +226,7 @@ def spimi_build_index(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], tra
     return index
 
 
-def time_builder(builder: Callable[[Sequence[Tuple[DocID, Sequence[str]]], TokenTransform], InvertedIndex],
-                 tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform: TokenTransform,
-                 label: str) -> Tuple[InvertedIndex, float]:
+def time_builder(builder, tokenised_docs, transform, label):
     start = time.perf_counter()
     index = builder(tokenised_docs, transform)
     elapsed = time.perf_counter() - start
@@ -256,11 +234,9 @@ def time_builder(builder: Callable[[Sequence[Tuple[DocID, Sequence[str]]], Token
     return index, elapsed
 
 
-def limit_pairs(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform: TokenTransform, limit: int) -> List[Tuple[DocID, Sequence[str]]]:
-    """Trim documents so that the naive list ``F`` is roughly ``limit`` pairs long."""
-
+def limit_pairs(tokenised_docs, transform, limit):
     total = 0
-    trimmed: List[Tuple[DocID, Sequence[str]]] = []
+    trimmed = []
     for doc in tokenised_docs:
         trimmed.append(doc)
         total += len(transform(doc[1]))
@@ -269,38 +245,38 @@ def limit_pairs(tokenised_docs: Sequence[Tuple[DocID, Sequence[str]]], transform
     return trimmed
 
 
-# ---------------------------------------------------------------------------
-# Assignment runner
-# ---------------------------------------------------------------------------
+# ===== Assignment runner =====
 SAMPLE_SINGLE_QUERIES = [["oil"], ["market"], ["british"]]
 SAMPLE_AND_QUERIES = [["oil", "market"], ["gold", "prices"], ["u.s.", "trade"]]
 
 
-def main() -> None:
+def main():
     docs = tokenize_documents(load_reuters_docs(REUTERS_DIR))
 
     # --- Subproject I: naive indexer -------------------------------------
     print("Subproject I – naive indexer")
-    naive_indexes: List[Tuple[str, TokenTransform, InvertedIndex]] = []
-    for name, transform in VARIANTS:
-        index, pair_count, unique_pairs = naive_build_index(docs, transform)
-        dict_size, postings_size = describe_index(index)
-        print(f" {name:<16} | F={format_int(pair_count):>10} | unique={format_int(unique_pairs):>10} | "
-              f"dict={format_int(dict_size):>10} | postings={format_int(postings_size):>10}")
-        naive_indexes.append((name, transform, index))
+    base_name, base_transform = BASE_VARIANT
+    base_index, pair_count, unique_pairs = naive_build_index(docs, base_transform)
+    dict_size, postings_size = describe_index(base_index)
+    print(f" {base_name:<16} | F={format_int(pair_count):>10} | unique={format_int(unique_pairs):>10} | "
+          f"dict={format_int(dict_size):>10} | postings={format_int(postings_size):>10}")
+    base_entry = (base_name, base_transform, base_index)
 
     # --- Subproject II: query processor validation -----------------------
     print("\nSubproject II – query processing samples")
     samples = SAMPLE_SINGLE_QUERIES + SAMPLE_AND_QUERIES
-    for name, transform, index in naive_indexes:
-        compare_query_results(name, transform, index, samples)
+    compare_query_results(base_name, base_transform, base_index, samples)
 
     # --- Subproject III: lossy dictionary compression --------------------
     print("\nSubproject III – lossy dictionary compression table")
-    run_compression_table([(name, index) for name, _, index in naive_indexes])
+    compression_indexes = [base_entry]
+    for name, transform in COMPRESSION_VARIANTS:
+        index, _, _ = naive_build_index(docs, transform)
+        compression_indexes.append((name, transform, index))
+    run_compression_table([(name, index) for name, _, index in compression_indexes])
 
     # Compare sample query behaviour on the compressed (case-folded) index
-    case_fold_index = next(idx for name, _, idx in naive_indexes if name == "CASE FOLD")
+    case_fold_index = next(idx for name, _, idx in compression_indexes if name == "CASE FOLD")
     compare_query_results("CASE FOLD (compressed)", case_fold, case_fold_index, samples)
 
     # --- Subproject IV: SPIMI indexer ------------------------------------
