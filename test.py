@@ -1,9 +1,20 @@
 # ====== COMP479 Project 1 Driver ======
-"""Build Reuters-21578 indexes and run the assignment subprojects."""
+"""Utilities to build Reuters-21578 indexes and run the four subprojects.
+
+The script is organised to mirror the assignment description:
+
+Subproject I   – Naive indexer
+Subproject II  – Query processing
+Subproject III – Lossy dictionary compression experiments
+Subproject IV  – SPIMI indexer and timing comparison
+"""
+
+from __future__ import annotations
 
 import os
 import time
 from collections import defaultdict
+from typing import Callable, Dict, Iterable, List, Sequence, Tuple
 
 import nltk
 from bs4 import BeautifulSoup
