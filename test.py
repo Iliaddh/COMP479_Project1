@@ -134,28 +134,27 @@ def drop_numbers_then_case(tokens):
 
 
 def stop_30(tokens):
-    lower = case_fold(tokens)
-    return [t for t in lower if t not in TOP30]
+    folded = drop_numbers_then_case(tokens)
+    return [t for t in folded if t not in TOP30]
 
 
 def stop_150(tokens):
-    lower = case_fold(tokens)
-    return [t for t in lower if t not in STOP150]
+    folded = drop_numbers_then_case(tokens)
+    return [t for t in folded if t not in STOP150]
 
 
 def stemmed(tokens):
-    lower = [t for t in case_fold(tokens) if t not in EN_STOP]
-    return [STEMMER.stem(t) if any(ch.isalpha() for ch in t) else t for t in lower]
+    filtered = [t for t in drop_numbers_then_case(tokens) if t not in EN_STOP]
+    return [STEMMER.stem(t) if any(ch.isalpha() for ch in t) else t for t in filtered]
 
 
 BASE_VARIANT = ("UNFILTERED", keep_all)
 COMPRESSION_VARIANTS = [
     ("NO NUMBERS", drop_numbers),
-    ("NO NUMBERS + CASE", drop_numbers_then_case),
-    ("CASE FOLD", case_fold),
+    ("CASE FOLD", drop_numbers_then_case),
     ("STOP 30", stop_30),
     ("STOP 150", stop_150),
-    ("STEMMED", stemmed),
+    ("STEMMING", stemmed),
 ]
 
 
@@ -269,9 +268,9 @@ def main():
         compression_indexes.append((name, transform, index))
     run_compression_table([(name, index) for name, _, index in compression_indexes])
 
-    # Compare sample query behaviour on the compressed (no numbers + case) index
-    no_num_case_index = next(idx for name, _, idx in compression_indexes if name == "NO NUMBERS + CASE")
-    compare_query_results("NO NUMBERS + CASE (compressed)", drop_numbers_then_case, no_num_case_index, samples)
+    # Compare sample query behaviour on the case folded index
+    case_fold_index = next(idx for name, _, idx in compression_indexes if name == "CASE FOLD")
+    compare_query_results("CASE FOLD (compressed)", drop_numbers_then_case, case_fold_index, samples)
 
     # --- Subproject IV: SPIMI indexer ------------------------------------
     print("\nSubproject IV – SPIMI timing comparison")
