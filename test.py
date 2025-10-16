@@ -43,11 +43,11 @@ def tokenize_documents(docs):
 
 # ===== Subproject I – Naive indexer =====
 def naive_pairs(tokenised_docs, transform):
-    pairs = []
+    F = []
     for doc_id, tokens in tokenised_docs:
         for term in transform(tokens):
-            pairs.append((term, doc_id))
-    return pairs
+            F.append((term, doc_id))
+    return F
 
 
 def dedupe_sorted_pairs(pairs):
@@ -70,11 +70,11 @@ def build_index_from_pairs(pairs):
 
 
 def naive_build_index(tokenised_docs, transform):
-    pairs = naive_pairs(tokenised_docs, transform)
-    pairs.sort()
-    unique_pairs = dedupe_sorted_pairs(pairs)
+    F = naive_pairs(tokenised_docs, transform)
+    F.sort()
+    unique_pairs = dedupe_sorted_pairs(F)
     index = build_index_from_pairs(unique_pairs)
-    return index, len(pairs), len(unique_pairs)
+    return index, len(F), len(unique_pairs)
 
 
 # ===== Subproject II – Single-term and AND query processing =====
