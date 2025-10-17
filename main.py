@@ -16,7 +16,6 @@ REUTERS_DIR = "reuters21578"
 
 # ===== Shared helpers =====
 # Load and tokenize the Reuters-21578 documents.
-# keep_all: No transformation, keep all tokens.
 def load_reuters_docs(path):
     docs = []
     for filename in os.listdir(path):
@@ -38,6 +37,7 @@ def tokenize_documents(docs):
         tokenised.append((doc_id, word_tokenize(text)))
     return tokenised
 
+# keep_all: No transformation, keep all tokens.
 def keep_all(tokens):
     return tokens
 BASE_VARIANT = ("UNFILTERED", keep_all)
